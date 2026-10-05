@@ -1,0 +1,15 @@
+{
+  "name": "worker-protocol",
+  "description": "NecturaLabs worker protocol: file-based communication between an orchestrating agent and the workers it dispatches.",
+  "owner": {
+    "name": "NecturaLabs",
+    "url": "https://github.com/NecturaLabs"
+  },
+  "plugins": [
+    {
+      "name": "worker-protocol",
+      "description": "Decide, log, escalate rarely: a file-based protocol for orchestrated agents and workflow workers, with a watcher, contracts and a ledger.",
+      "source": "./"
+    }
+  ]
+}
