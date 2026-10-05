@@ -1,7 +1,7 @@
 {
   "name": "worker-protocol",
   "description": "A file-based protocol for orchestrated agents: workers decide within a fixed precedence and log it, publish contracts for their peers, escalate only what they must, and every deferred item lands in a ledger.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "NecturaLabs",
     "url": "https://github.com/NecturaLabs"

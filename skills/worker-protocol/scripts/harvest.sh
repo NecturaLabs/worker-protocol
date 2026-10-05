@@ -1,48 +1,65 @@
 #!/bin/sh
-# Manager side: summarise every worker file for a checkpoint.
+# Manager side: summarise a protocol run at a checkpoint.
 # Usage: harvest.sh <dir>
-# Prints open questions, then each worker's decisions and deferred items, then the contracts
-# headings and the ledger's open lines. Exit status 1 when a question is still open.
+# Prints the run, open questions, each worker's result, decisions, deferred items, answers and
+# overrides count, every contract, and the ledger's open lines. Exit 1 while a question is open.
 set -eu
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$(dirname "$0")/lib.sh"
 
 [ $# -eq 1 ] || { echo "usage: harvest.sh <dir>" >&2; exit 2; }
 dir=$1
-status=0
+[ -d "$dir/workers" ] || { echo "not a protocol run (no workers/): $dir" >&2; exit 1; }
+open=0
 
-section() { # file, heading: print the non-empty lines of every section with that heading
-  awk -v h="$2" '$0 == h { on = 1; next } /^## / { on = 0 } on && NF { print }' "$1"
-}
+if [ -f "$dir/RUN.md" ]; then
+  echo "== Run"
+  grep '^- \*\*' "$dir/RUN.md"
+  echo
+fi
 
 echo "== Open questions"
-for f in "$dir"/*.md; do
+for f in "$dir"/workers/*.md; do
   [ -f "$f" ] || continue
-  if grep -H '^## Q[0-9][0-9]* · .* · OPEN$' "$f"; then status=1; fi
+  label=$(basename "$f" .md)
+  for line in $(scan_worker "$f" | awk '$1 == "Q" { print $2 ":" $3 }'); do
+    n=${line%%:*}
+    if ! answered "$dir/answers/$label.md" "$n"; then
+      echo "$label Q$n (${line#*:})"
+      open=$((open + 1))
+    fi
+  done
 done
+[ "$open" -gt 0 ] || echo "(none)"
 
-for f in "$dir"/*.md; do
+for f in "$dir"/workers/*.md; do
   [ -f "$f" ] || continue
-  case $(basename "$f") in PROTOCOL.md | contracts.md | ledger.md) continue ;; esac
   label=$(basename "$f" .md)
   echo
   echo "== $label"
+  status=$(scan_worker "$f" | awk '$1 == "R" { $1 = ""; sub(/^ /, ""); s = $0 } END { print s }')
+  echo "-- result: ${status:-(none yet)}"
   echo "-- decisions"
   section "$f" "## Decisions"
   echo "-- deferred"
   section "$f" "## Deferred"
-  if grep -q '^## Overrides$' "$f"; then
-    echo "-- overrides"
-    section "$f" "## Overrides"
+  a="$dir/answers/$label.md"
+  if [ -f "$a" ]; then
+    echo "-- answers: $(grep -c '^## A[0-9][0-9]*$' "$a" || true), overrides: $(grep -c '^## Override O[0-9][0-9]*$' "$a" || true)"
   fi
 done
 
-if [ -f "$dir/contracts.md" ]; then
-  echo
-  echo "== Contracts"
-  grep '^## ' "$dir/contracts.md" || true
-fi
+echo
+echo "== Contracts"
+for f in "$dir"/contracts/*.md; do
+  [ -f "$f" ] || continue
+  label=$(basename "$f" .md)
+  grep '^## ' "$f" | sed "s/^## /$label · /"
+done
+
 if [ -f "$dir/ledger.md" ]; then
   echo
   echo "== Ledger (open)"
   grep -- '- \[ \]' "$dir/ledger.md" || echo "(none)"
 fi
-exit $status
+[ "$open" -eq 0 ]

@@ -1,10 +1,19 @@
-# Worker protocol: decide, log, escalate rarely
+# Worker protocol v2: decide, log, escalate rarely
 
-You are a worker dispatched by a manager session. All communication with the manager goes through
-files in this directory. **Never send the manager a chat message** for questions or status: it
-reaches the user's screen, and in some harnesses a message exchange restarts a finished worker
-outside its workflow. Your own file is `<label>.md` here (create it if missing; never edit another
-worker's file).
+You are a worker dispatched by a manager. All communication with the manager goes through files in
+this protocol directory. **Never send the manager a chat message** for questions or status: it
+reaches the user's screen, and in some harnesses a message exchange starts a second copy of a
+worker beside the first.
+
+## 0. Before you start
+
+- Check that `RUN.md` here names the run id your brief gives. If it does not, stop: the directory
+  belongs to another run.
+- Every file has exactly one writer. You write only `workers/<label>.md` and
+  `contracts/<label>.md`; create them if missing. You read everything else. The manager writes
+  `answers/<label>.md`, `ledger.md` and `RUN.md`.
+- Never write credentials, tokens, private keys or other secret values into any protocol file. Refer
+  to them by name or location ("the token in the OS keyring", "`$GITHUB_TOKEN`").
 
 ## 1. Decide it yourself (the default)
 
@@ -19,46 +28,52 @@ answers the question wins:
 4. The repository's instruction files and the existing pattern closest to what you are building.
 5. Your judgment: the smallest change that keeps the work consistent.
 
-Then **log it** in your file under `## Decisions`, one line each:
+Then **log it** under `## Decisions` in `workers/<label>.md`, one line each:
 `D<n>: <what you decided> — because <which source> (files: ...)`.
-The manager reviews decisions in bulk and may overturn one under `## Overrides` in your file.
-Re-read your file before each commit and apply any override.
 
 ## 2. Publish contracts for your peers
 
 When you add or change an interface, size, token, schema or behaviour another worker or the
-integrator must follow, append one entry to `contracts.md` (append only; never edit another
-worker's entry):
+integrator must follow, add an entry to `contracts/<label>.md`:
 
-    ## <label> · <item>
+    ## <item>
     <signature, value or rule>; who must use it.
 
-Read `contracts.md` before each commit and follow your peers' entries. If two contracts conflict,
-keep your own work building and log the conflict under `## Deferred`.
+Read every file in `contracts/` before each commit and follow your peers' entries.
+
+**Contract conflict** (a peer's contract contradicts yours, the spec, or what your task needs):
+1. If the sources of authority in section 1 show one side is wrong, follow the right one and log
+   a decision.
+2. Otherwise escalate it at once (section 3).
+3. Add nothing new that depends on the disputed contract until it is answered.
+4. Continue with your unrelated work.
 
 ## 3. Escalate only these
 
-- User-level matters: product rules, privacy or consent, credentials, network access, new
-  dependencies, unsafe code, legal text, anything destructive or outward-facing.
-- A contradiction between sources of authority that the order above cannot settle.
+- User-level matters **not already authorised by a higher source** in section 1: product rules,
+  privacy or consent, credentials, network access, new dependencies, unsafe code, legal text,
+  anything destructive or outward-facing.
+- A contradiction, including a contract conflict, that the order in section 1 cannot settle.
 - A block: you cannot continue any part of your task.
 
-Append to your file (or run the skill's `ask.sh`):
+Append to `workers/<label>.md` (or run the skill's `ask.sh`):
 
-    ## Q<n> · <label> · OPEN
+    ## Q<n>
+    **Mode:** CONTINUING | BLOCKED
     **Context:** file:line and what you found.
     **Question:** one concrete question.
     **Options:** (a) ... (b) ...
-    **Default:** what you will do if unanswered; BLOCKED or CONTINUING.
+    **Default:** what you will do if unanswered.
 
-A watcher alerts the manager. The answer arrives in place: the heading changes to `ANSWERED` and an
-`**A:**` paragraph follows the question. Answers are binding.
+The manager answers in `answers/<label>.md` as `## A<n>`. Answers are binding. Read that file
+before each commit and before your final reply. The manager may also add `## Override O<n>`
+entries there, which are binding too.
 
-- Continuing: proceed with your default; re-read your file before each commit and before your final
-  reply, and adjust if the answer differs.
-- Blocked: wait at most 20 minutes for the answer
-  (`timeout 1200 sh -c 'until grep -q "^## Q<n> · <label> · ANSWERED" <file>; do sleep 20; done'`,
-  or the skill's `ask.sh --wait`), then proceed with your default and say so in your final reply.
+- **CONTINUING:** proceed with your default; adjust when the answer differs.
+- **BLOCKED:** finish everything that does not depend on the answer, write your `## Result` with
+  status BLOCKED, and end. The manager answers and dispatches a continuation that resumes from your
+  file. Wait in place only when your brief says `WAIT <minutes>`, for at most that long
+  (`ask.sh --wait`).
 
 ## 4. Deferred work
 
@@ -66,7 +81,16 @@ Everything you leave undone, find out of scope or work around goes on one line u
 `## Deferred` in your file **and** in your final reply. The manager folds it into `ledger.md`;
 nothing is dropped.
 
-## 5. Your final reply
+## 5. Result (last thing you write)
 
-List the answers you received, the decisions you logged (count and anything notable), the contracts
-you published and your deferred items.
+Before your final reply, write this block at the end of `workers/<label>.md`:
+
+    ## Result
+    **Status:** COMPLETE | PARTIAL | BLOCKED
+    **Changed:** branch/commits/files.
+    **Tests:** the commands you ran and their outcome.
+    **Evidence:** paths to logs, screenshots or outputs.
+    **Remaining:** what is left, or "none".
+
+Your final reply repeats it, plus the answers you received, the number of decisions you logged,
+the contracts you published and your deferred items.
