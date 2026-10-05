@@ -10,26 +10,35 @@ set -eu
 usage() { echo "usage: answer.sh <dir> <label> <n> <answer> | answer.sh <dir> <label> --override <text>" >&2; exit 2; }
 [ $# -eq 4 ] || usage
 dir=$1 label=$2
-valid_label "$label"
+valid_label "$label" || exit 2
 paths "$dir" "$label"
 mkdir -p "$dir/answers"
 
-if [ "$3" = "--override" ]; then
+override() { # text
   k=$(( $( { grep -c '^## Override O[0-9][0-9]*$' "$answers" 2>/dev/null || true; } ) + 1 ))
-  printf '\n## Override O%s\n%s\n' "$k" "$4" >> "$answers"
+  printf '\n## Override O%s\n%s\n' "$k" "$(no_headings "$1")" >> "$answers" || return 1
   echo "override O$k for $label"
-  exit 0
+}
+
+reply() { # n, text
+  if answered "$answers" "$1"; then
+    echo "Q$1 of $label is already answered" >&2
+    return 1
+  fi
+  printf '\n## A%s\n%s\n' "$1" "$(no_headings "$2")" >> "$answers" || return 1
+  echo "answered Q$1 for $label"
+}
+
+lock="$dir/answers/.$label.lock"
+if [ "$3" = "--override" ]; then
+  with_lock "$lock" override "$4"
+  exit
 fi
 
 n=$3
-case $n in "" | *[!0-9]*) usage ;; esac
+valid_count "$n" "question number" || usage
 if [ ! -f "$worker" ] || ! grep -qx "## Q$n" "$worker"; then
   echo "$label has no question Q$n" >&2
   exit 1
 fi
-if answered "$answers" "$n"; then
-  echo "Q$n of $label is already answered" >&2
-  exit 1
-fi
-printf '\n## A%s\n%s\n' "$n" "$4" >> "$answers"
-echo "answered Q$n for $label"
+with_lock "$lock" reply "$n" "$4"

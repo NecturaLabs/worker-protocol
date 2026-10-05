@@ -14,10 +14,13 @@ one writer:
 |---|---|---|
 | `RUN.md` | manager | Run id, task, status; workers check the id against their brief |
 | `PROTOCOL.md` | manager (from template) | The rules every worker follows, with this run's sources of authority |
-| `workers/<label>.md` | that worker | `## Decisions`, `## Q<n>` escalations, `## Deferred`, final `## Result` |
+| `workers/<label>.md` | that worker | `D<n>:` decisions, `## Q<n>` escalations, `F<n>:` deferred items, `## Result` |
 | `contracts/<label>.md` | that worker | Interfaces, sizes, tokens, behaviours its peers must follow |
 | `answers/<label>.md` | manager | `## A<n>` answers and `## Override O<n>` entries, binding |
 | `ledger.md` | manager | Every deferred or found item until done with evidence or reported |
+| `.watch-seen` | `watch.sh` | Events already printed, so a re-armed watcher does not repeat them |
+| `answers/.<label>.lock/` | `answer.sh` | Held while answering, so two answers to one question cannot both land |
+| `workers/.watch-probe-<pid>` | `watch.sh` (fswatch only) | Touched until fswatch reports readiness, then deleted |
 
 Single writers mean no lost updates, however many workers run at once. The test suite runs 16
 concurrent workers against a manager answering from watcher events. Never write credentials or
@@ -30,7 +33,8 @@ holding this file).
 
 1. **Create the run** in a scratch location outside the repository:
    `sh <skill>/scripts/init.sh <dir> --task "<one line>"`. It refuses a non-empty directory, so a
-   stale run never leaks into a new one, and prints the run id. `--resume` reopens an existing run.
+   stale run never leaks into a new one, and prints the run id. `RUN.md` records the run id and the
+   scripts directory workers use. `--resume` reopens an ACTIVE run and refuses a CLOSED one.
 2. **Fill in the sources of authority** in `<dir>/PROTOCOL.md`, section 1, in the order they win:
    - the user's decisions in their own words;
    - the spec;
@@ -39,12 +43,16 @@ holding this file).
 
    This list is what lets workers decide alone; a vague list produces questions.
 3. **Brief every worker** with `templates/brief-snippet.md`, filled with its label (unique,
-   `[a-z0-9-]+`), the run id and the directory. Add `WAIT <minutes>` only if you will answer that
-   fast and the worker may hold its slot meanwhile; otherwise blocked workers end BLOCKED.
+   `[a-z0-9-]+`), the run id, the directory and the scripts directory. Keep its wait line, with a
+   number of seconds, only if you will answer that fast and the worker may hold its slot
+   meanwhile; otherwise blocked workers end BLOCKED.
 4. **Arm the watcher** before workers start: `sh <skill>/scripts/watch.sh <dir>` prints
    `ESCALATION <label> Q<n> <mode>` per unanswered question and `RESULT <label> <status>` per
    result. Run it as a background monitor that notifies you per line (Claude Code: the Monitor
-   tool, re-armed on expiry). Without one, run `harvest.sh` at each checkpoint.
+   tool, re-armed on expiry). Each event is printed once per run, even across a re-armed watcher;
+   `--replay` prints every current one again. The watcher exits 1 with a message if its event
+   source (inotifywait or fswatch) dies, so a silent monitor means no events, never a dead watch.
+   Without a monitor, run `harvest.sh` at each checkpoint.
 5. **Answer in your own files**:
    - `sh <skill>/scripts/answer.sh <dir> <label> <n> "<answer>"` answers a question;
    - `--override "<text>"` overturns a logged decision or redirects a worker.
@@ -66,7 +74,8 @@ holding this file).
    - Trust a worker's `## Result` only as far as its evidence goes: verify it.
 9. **Close the ledger.** Work is not done while a ledger line is open. Each line ends `[x]` with
    its evidence, or `[R]`: reported to the user, with the reason it could not be fixed. The final
-   report names every `[R]` item. Set `RUN.md` status to CLOSED at the end.
+   report names every `[R]` item. Then mark the run CLOSED: `sh <skill>/scripts/init.sh <dir> --close`,
+   which refuses while a question or a ledger line is open.
 
 ## If you are a worker
 
@@ -74,12 +83,12 @@ Your brief names your label, the run id and the directory. Read `<dir>/PROTOCOL.
 follow it. In short:
 - Check that the `RUN.md` id matches your brief.
 - Write only your own two files.
-- Decide by the precedence and log one line per decision.
+- Only append to your files. Decide by the precedence and log one `D<n>:` line per decision.
 - Publish contracts, and read the other workers' contracts before each commit.
 - Escalate a contract conflict at once, and add nothing new that depends on it.
 - Escalate only matters no higher source already authorised.
 - When blocked, finish the unblocked work and end BLOCKED instead of waiting.
-- Defer visibly.
+- Defer visibly, as `F<n>:` lines.
 - Write `## Result` (status, changes, tests, evidence, remaining) before your final reply.
 
 `sh <skill>/scripts/ask.sh <dir> <label> "<context>" "<question>" "<options>" "<default>" [--blocked] [--wait <s>]`

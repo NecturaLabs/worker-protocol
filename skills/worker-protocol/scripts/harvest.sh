@@ -14,7 +14,7 @@ open=0
 
 if [ -f "$dir/RUN.md" ]; then
   echo "== Run"
-  grep '^- \*\*' "$dir/RUN.md"
+  grep '^- \*\*' "$dir/RUN.md" || echo "(RUN.md has no fields)"
   echo
 fi
 
@@ -22,7 +22,7 @@ echo "== Open questions"
 for f in "$dir"/workers/*.md; do
   [ -f "$f" ] || continue
   label=$(basename "$f" .md)
-  for line in $(scan_worker "$f" | awk '$1 == "Q" { print $2 ":" $3 }'); do
+  for line in $(scan_worker "$f" all | awk '$1 == "Q" { print $2 ":" $3 }'); do
     n=${line%%:*}
     if ! answered "$dir/answers/$label.md" "$n"; then
       echo "$label Q$n (${line#*:})"
@@ -37,12 +37,13 @@ for f in "$dir"/workers/*.md; do
   label=$(basename "$f" .md)
   echo
   echo "== $label"
-  status=$(scan_worker "$f" | awk '$1 == "R" { $1 = ""; sub(/^ /, ""); s = $0 } END { print s }')
+  status=$(scan_worker "$f" all | awk '$1 == "R" { $1 = ""; sub(/^ /, ""); s = $0 } END { print s }')
   echo "-- result: ${status:-(none yet)}"
+  [ -z "$(tail -c 1 "$f")" ] || echo "-- warning: the last line has no newline; the watcher ignores it until it ends"
   echo "-- decisions"
-  section "$f" "## Decisions"
+  entries "$f" D
   echo "-- deferred"
-  section "$f" "## Deferred"
+  entries "$f" F
   a="$dir/answers/$label.md"
   if [ -f "$a" ]; then
     echo "-- answers: $(grep -c '^## A[0-9][0-9]*$' "$a" || true), overrides: $(grep -c '^## Override O[0-9][0-9]*$' "$a" || true)"
@@ -54,12 +55,15 @@ echo "== Contracts"
 for f in "$dir"/contracts/*.md; do
   [ -f "$f" ] || continue
   label=$(basename "$f" .md)
-  grep '^## ' "$f" | sed "s/^## /$label · /"
+  grep '^## ' "$f" | sed 's/^## //' | awk -v l="$label" '
+    { if (!($0 in n)) order[++k] = $0; n[$0]++ }
+    END { for (i = 1; i <= k; i++) print l " · " order[i] (n[order[i]] > 1 ? " (" n[order[i]] " versions; the last wins)" : "") }
+  '
 done
 
 if [ -f "$dir/ledger.md" ]; then
   echo
   echo "== Ledger (open)"
-  grep -- '- \[ \]' "$dir/ledger.md" || echo "(none)"
+  grep '^- \[ \]' "$dir/ledger.md" || echo "(none)"
 fi
 [ "$open" -eq 0 ]

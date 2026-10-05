@@ -7,11 +7,13 @@ worker beside the first.
 
 ## 0. Before you start
 
-- Check that `RUN.md` here names the run id your brief gives. If it does not, stop: the directory
-  belongs to another run.
+- Check that `RUN.md` here names the run id your brief gives and says `Status: ACTIVE`. If it does
+  not, stop: the directory belongs to another run, or the run is over.
 - Every file has exactly one writer. You write only `workers/<label>.md` and
-  `contracts/<label>.md`; create them if missing. You read everything else. The manager writes
-  `answers/<label>.md`, `ledger.md` and `RUN.md`.
+  `contracts/<label>.md`; create them if missing, and only ever append to them, ending every
+  line with a newline (the watcher ignores an unfinished last line). You read
+  everything else. The manager writes `answers/<label>.md`, `ledger.md` and `RUN.md`.
+- The helper scripts are in the directory `RUN.md` names under **Scripts**.
 - Never write credentials, tokens, private keys or other secret values into any protocol file. Refer
   to them by name or location ("the token in the OS keyring", "`$GITHUB_TOKEN`").
 
@@ -28,7 +30,7 @@ answers the question wins:
 4. The repository's instruction files and the existing pattern closest to what you are building.
 5. Your judgment: the smallest change that keeps the work consistent.
 
-Then **log it** under `## Decisions` in `workers/<label>.md`, one line each:
+Then **log it** by appending one line to `workers/<label>.md`, anywhere in the file:
 `D<n>: <what you decided> — because <which source> (files: ...)`.
 
 ## 2. Publish contracts for your peers
@@ -38,6 +40,8 @@ integrator must follow, add an entry to `contracts/<label>.md`:
 
     ## <item>
     <signature, value or rule>; who must use it.
+
+To change an entry, append a new one with the same heading: the last entry with a heading wins.
 
 Read every file in `contracts/` before each commit and follow your peers' entries.
 
@@ -56,7 +60,7 @@ Read every file in `contracts/` before each commit and follow your peers' entrie
 - A contradiction, including a contract conflict, that the order in section 1 cannot settle.
 - A block: you cannot continue any part of your task.
 
-Append to `workers/<label>.md` (or run the skill's `ask.sh`):
+Run `ask.sh` from the scripts directory, or append the block to `workers/<label>.md` by hand:
 
     ## Q<n>
     **Mode:** CONTINUING | BLOCKED
@@ -72,25 +76,27 @@ entries there, which are binding too.
 - **CONTINUING:** proceed with your default; adjust when the answer differs.
 - **BLOCKED:** finish everything that does not depend on the answer, write your `## Result` with
   status BLOCKED, and end. The manager answers and dispatches a continuation that resumes from your
-  file. Wait in place only when your brief says `WAIT <minutes>`, for at most that long
-  (`ask.sh --wait`).
+  file. Wait in place only when your brief allows it, for at most the time it gives
+  (`ask.sh ... --blocked --wait <seconds>`).
 
 ## 4. Deferred work
 
-Everything you leave undone, find out of scope or work around goes on one line under
-`## Deferred` in your file **and** in your final reply. The manager folds it into `ledger.md`;
-nothing is dropped.
+Everything you leave undone, find out of scope or work around goes on one line appended to your
+file, `F<n>: <item> (files: ...)`, **and** in your final reply. The manager folds it into
+`ledger.md`; nothing is dropped.
 
 ## 5. Result (last thing you write)
 
 Before your final reply, write this block at the end of `workers/<label>.md`:
 
     ## Result
-    **Status:** COMPLETE | PARTIAL | BLOCKED
+    **Status:** COMPLETE
     **Changed:** branch/commits/files.
     **Tests:** the commands you ran and their outcome.
     **Evidence:** paths to logs, screenshots or outputs.
     **Remaining:** what is left, or "none".
 
-Your final reply repeats it, plus the answers you received, the number of decisions you logged,
+The status is exactly one word: `COMPLETE`, `PARTIAL` or `BLOCKED`; anything else is reported as
+`INVALID`. If a continuation of you ends again, it appends a new `## Result`. Your final reply
+repeats it, plus the answers you received, the number of decisions you logged,
 the contracts you published and your deferred items.
